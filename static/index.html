@@ -1,0 +1,166 @@
+<!doctype html>
+<html lang="en" data-theme="dark">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="siem-token" content="__SIEM_TOKEN__">
+<title>MAC SIEM</title>
+<link rel="stylesheet" href="/style.css">
+<script src="https://cdn.jsdelivr.net/npm/d3@7.9.0/dist/d3.min.js"
+  integrity="sha384-CjloA8y00+1SDAUkjs099PVfnY2KmDC2BZnws9kh8D/lX1s46w6EPhpXdqMfjK6i" crossorigin="anonymous"></script>
+<script src="https://cdn.jsdelivr.net/npm/topojson-client@3.1.0/dist/topojson-client.min.js"
+  integrity="sha384-Ukv1p/xTma6P4/2bY5KzWBw+ydSpXmhCMtyciIQVDJ1RmOxtCYNMF1uXT9T63H67" crossorigin="anonymous"></script>
+<script src="/countries.js"></script>
+<script src="/app.js" defer></script>
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><span class="logo" aria-hidden="true">◉</span> MAC SIEM</div>
+  <nav class="tabs" role="tablist">
+    <button role="tab" data-tab="overview" class="active">Overview</button>
+    <button role="tab" data-tab="connections">Connections</button>
+    <button role="tab" data-tab="alerts">Alerts <span id="alertBadge" class="badge hidden"></span></button>
+    <button role="tab" data-tab="rules">Rules</button>
+    <button role="tab" data-tab="history">History</button>
+  </nav>
+  <div class="status" id="statusChips"></div>
+  <button id="pauseBtn" class="btn ghost" title="Pause / resume capture">❚❚ Pause</button>
+</header>
+
+<main>
+  <!-- OVERVIEW -->
+  <section id="tab-overview" class="tab active">
+    <div class="kpis" id="kpis"></div>
+    <div class="grid">
+      <div class="card span-8 map-card">
+        <div class="card-h">
+          <h2>Who your Mac is talking to</h2>
+          <div class="legend" id="mapLegend"></div>
+        </div>
+        <div id="map" class="map"></div>
+        <div class="map-note" id="mapNote"></div>
+      </div>
+      <div class="card span-4">
+        <div class="card-h"><h2>Open alerts</h2><button class="btn ghost sm" data-goto="alerts">View all →</button></div>
+        <ul class="feed" id="alertFeed"></ul>
+      </div>
+
+      <div class="card span-6">
+        <div class="card-h"><h2>Throughput</h2><div class="legend" id="tpLegend"></div></div>
+        <div id="throughput" class="chart"></div>
+      </div>
+      <div class="card span-3">
+        <div class="card-h"><h2>Top apps</h2><span class="sub">since start · bytes</span></div>
+        <div id="topApps" class="bars"></div>
+      </div>
+      <div class="card span-3">
+        <div class="card-h"><h2>Top countries</h2><span class="sub">live · connections</span></div>
+        <div id="topCountries" class="bars"></div>
+      </div>
+
+      <div class="card span-8">
+        <div class="card-h"><h2>App → destination map</h2><span class="sub">public traffic, live</span></div>
+        <div id="appDest" class="appdest"></div>
+      </div>
+      <div class="card span-4">
+        <div class="card-h"><h2>Top organisations</h2><span class="sub">live · connections</span></div>
+        <div id="topOrgs" class="bars"></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CONNECTIONS -->
+  <section id="tab-connections" class="tab">
+    <div class="filters">
+      <input id="connSearch" type="search" placeholder="Filter: app, IP, host, country, org, port…" autocomplete="off">
+      <select id="connScope">
+        <option value="public">Internet only</option>
+        <option value="all">All traffic</option>
+        <option value="local">Local network only</option>
+      </select>
+      <select id="connApp"><option value="">All apps</option></select>
+      <label class="chk"><input type="checkbox" id="connAlerting"> Only alerting</label>
+      <span class="sub" id="connCount"></span>
+    </div>
+    <div class="card">
+      <div class="table-wrap"><table id="connTable" class="tbl"></table></div>
+    </div>
+    <div class="card">
+      <div class="card-h"><h2>Listening ports</h2><span class="sub">services on this Mac that accept connections · “exposed” = all interfaces</span></div>
+      <div class="table-wrap"><table id="listenTable" class="tbl"></table></div>
+    </div>
+  </section>
+
+  <!-- ALERTS -->
+  <section id="tab-alerts" class="tab">
+    <div class="filters">
+      <select id="alertSev">
+        <option value="">All severities</option>
+        <option>critical</option><option>high</option><option>medium</option><option>low</option><option>info</option>
+      </select>
+      <label class="chk"><input type="checkbox" id="alertShowAcked"> Show acknowledged</label>
+      <button class="btn" id="ackAll">Acknowledge all</button>
+    </div>
+    <div class="card"><div class="table-wrap"><table id="alertTable" class="tbl"></table></div></div>
+  </section>
+
+  <!-- RULES -->
+  <section id="tab-rules" class="tab">
+    <div class="grid">
+      <div class="card span-7">
+        <div class="card-h"><h2>rules.yaml</h2>
+          <div><span id="ruleMsg" class="msg"></span>
+          <button class="btn ghost" id="ruleReload">Revert</button>
+          <button class="btn primary" id="ruleSave">Validate &amp; save</button></div>
+        </div>
+        <textarea id="ruleText" spellcheck="false" wrap="off"></textarea>
+      </div>
+      <div class="card span-5">
+        <div class="card-h"><h2>Try a condition on live traffic</h2></div>
+        <div class="tester">
+          <input id="testExpr" type="text" spellcheck="false"
+                 value='scope == "public" and not apple'>
+          <button class="btn primary" id="testBtn">Run</button>
+        </div>
+        <div id="testMsg" class="msg"></div>
+        <div class="table-wrap short"><table id="testTable" class="tbl"></table></div>
+        <h3>Fields</h3>
+        <div id="fieldRef" class="fieldref"></div>
+        <h3>Helpers</h3>
+        <pre class="helpers">cidr(remote_ip, "10.0.0.0/8")      regex(hostname, r"\.ru$")
+contains(org, "amazon")            any_of(app, "zoom", "teams")
+startswith(path, "/tmp")           endswith(hostname, ".onion")
+lower(app) == "slack"              remote_port in [22, 3389]
+bytes_out > 100 * 1024 * 1024      not signed and scope == "public"</pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- HISTORY -->
+  <section id="tab-history" class="tab">
+    <div class="filters">
+      <input id="histSearch" type="search" placeholder="Search history: app, IP, host, org, country…">
+      <select id="histHours">
+        <option value="1">Last hour</option><option value="24" selected>Last 24 h</option>
+        <option value="168">Last 7 days</option><option value="720">Last 30 days</option>
+      </select>
+      <select id="histKind"><option value="close">Closed connections</option><option value="open">Opened</option><option value="">Both</option></select>
+      <button class="btn primary" id="histGo">Search</button>
+      <span class="sub" id="histCount"></span>
+    </div>
+    <div class="grid">
+      <div class="card span-6"><div class="card-h"><h2>Apps by data</h2><span class="sub">closed connections in range</span></div><div id="histApps" class="bars"></div></div>
+      <div class="card span-6"><div class="card-h"><h2>Countries by data</h2><span class="sub">closed connections in range</span></div><div id="histCountries" class="bars"></div></div>
+    </div>
+    <div class="card"><div class="table-wrap"><table id="histTable" class="tbl"></table></div></div>
+  </section>
+</main>
+
+<aside id="drawer" class="drawer" aria-hidden="true">
+  <div class="drawer-h"><h2 id="drawerTitle">Connection</h2><button class="btn ghost" id="drawerClose" aria-label="Close">✕</button></div>
+  <div id="drawerBody"></div>
+</aside>
+<div id="tooltip" class="tooltip" role="tooltip"></div>
+<footer class="foot">IP geolocation by <a href="https://db-ip.com" rel="noopener noreferrer" target="_blank">DB-IP</a> (CC BY 4.0) · map data Natural Earth · flows via macOS nettop</footer>
+</body>
+</html>

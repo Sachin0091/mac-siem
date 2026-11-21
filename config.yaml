@@ -1,0 +1,12 @@
+# MAC SIEM settings
+port: 8765                  # dashboard: http://127.0.0.1:8765 (always bound to localhost)
+poll_interval: 2            # seconds between nettop samples
+retention_days: 14          # connection history kept in data/siem.db
+rules_file: rules.yaml
+alert_cooldown_minutes: 30  # same rule + app + destination alerts at most this often
+learning_minutes: 10        # first run: learn normal apps/destinations before "new_*" fires
+dns_sniff: auto             # auto | off  (needs sudo or Wireshark's ChmodBPF to work)
+
+# Where "you" are on the map. Leave unset to auto-detect offline from your
+# public IPv6 address (if you have one). Example:
+# home: {lat: 28.61, lon: 77.21, label: "New Delhi"}

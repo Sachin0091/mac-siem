@@ -1,0 +1,69 @@
+# MAC SIEM detection rules
+# ------------------------------------------------------------------
+# Each rule's `condition` is a Python-like expression evaluated against every
+# live connection. Edit here or in the dashboard's Rules tab (it validates
+# before saving). Fields and helpers are listed in the Rules tab.
+#
+#   fields:  app process path user proto remote_ip remote_port local_port
+#            service scope country country_code city asn org hostname state
+#            interface bytes_in bytes_out rate_in rate_out rtt_ms duration
+#            signed apple signer team_id new_app new_dest
+#   helpers: cidr(ip, "net/len")  regex(value, "pattern")  contains(value, "x")
+#            any_of(value, "a", "b")  startswith/endswith(value, "x")  lower(x)
+#   severity: info | low | medium | high | critical
+
+- id: unsigned-outbound
+  name: Unsigned binary talking to the internet
+  severity: high
+  condition: signed == False and scope == "public"
+  description: Binaries without a valid code signature are uncommon on macOS and worth a look.
+
+- id: sanctioned-country
+  name: Connection to high-risk country
+  severity: high
+  condition: country_code in ["RU", "KP", "IR", "BY", "SY", "CU"]
+  description: Traffic to a country you normally never talk to. Adjust the list to taste.
+
+- id: tor-ports
+  name: Possible Tor / proxy traffic
+  severity: medium
+  condition: remote_port in [9001, 9030, 9050, 9150] and scope == "public"
+
+- id: cleartext-protocols
+  name: Cleartext protocol to the internet
+  severity: medium
+  condition: remote_port in [21, 23, 80, 110, 143] and scope == "public"
+  description: FTP, Telnet, HTTP, POP3, IMAP send data unencrypted.
+
+- id: remote-admin
+  name: Remote admin protocol (SSH/RDP/VNC/SMB) to the internet
+  severity: low
+  condition: remote_port in [22, 3389, 5900, 445] and scope == "public"
+
+- id: suspicious-tld
+  name: Lookup of a domain on an abused TLD
+  severity: medium
+  condition: regex(hostname, r"\.(xyz|top|zip|mov|click|gq|tk|ml|cf|ru|su)$")
+
+- id: big-upload
+  name: Large upload (>50 MB on one connection)
+  severity: medium
+  condition: bytes_out > 50 * 1024 * 1024 and scope == "public"
+  description: Possible data exfiltration - or just a backup/upload you started.
+
+- id: first-time-app
+  name: New app on the network
+  severity: info
+  condition: new_app and scope == "public"
+  description: First time this app has ever been seen talking to the internet.
+
+- id: new-dest-non-apple
+  name: Third-party app reached a new organisation
+  severity: info
+  enabled: false
+  condition: new_dest and not apple and scope == "public"
+
+- id: shell-tools-outbound
+  name: Shell / scripting tool connecting out
+  severity: low
+  condition: process in ["curl", "wget", "nc", "ncat", "python3", "python", "perl", "ruby", "osascript", "bash", "zsh", "sh"] and scope == "public"
